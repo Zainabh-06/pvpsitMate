@@ -114,12 +114,25 @@ div[data-baseweb="input"] input {
 # PDF Folder Path
 # -------------------------
 PDF_FOLDER = "data" # update if needed
-
 # -------------------------
-# Build Vector Store
+# Build / Load Vector Store
 # -------------------------
-@st.cache_data(show_spinner=True)
+@st.cache_resource
 def build_vectorstore(pdf_folder):
+
+    embeddings = HuggingFaceEmbeddings(
+        model_name="all-MiniLM-L6-v2"
+    )
+
+    # If vectorstore already exists, load it
+    if os.path.exists("vectorstore"):
+        return FAISS.load_local(
+            "vectorstore",
+            embeddings,
+            allow_dangerous_deserialization=True
+        )
+
+    # Otherwise create it
     documents = []
 
     for file in os.listdir(pdf_folder):
@@ -134,11 +147,12 @@ def build_vectorstore(pdf_folder):
 
     chunks = splitter.split_documents(documents)
 
-    embeddings = HuggingFaceEmbeddings(
-        model_name="all-MiniLM-L6-v2"
-    )
+    vectorstore = FAISS.from_documents(chunks, embeddings)
 
-    return FAISS.from_documents(chunks, embeddings)
+    # Save FAISS index
+    vectorstore.save_local("vectorstore")
+
+    return vectorstore
 
 
 with st.spinner("📥 Loading PDFs and building vector store..."):
@@ -221,5 +235,6 @@ if query and llm:
 
         except Exception as e:
             st.error(f"Error: {e}")
+
 
 
