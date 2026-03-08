@@ -47,6 +47,8 @@ embeddings = HuggingFaceEmbeddings(
 # ===============================
 vectorstore = FAISS.from_documents(chunks, embeddings)
 
+retriever = vectorstore.as_retriever(search_kwargs={"k": 7})
+
 # ===============================
 # LLaMA-3 via Groq API
 # ===============================
@@ -54,26 +56,18 @@ llm = ChatGroq(
     model="llama-3.1-8b-instant",   # Groq LLaMA-3 model
     temperature=0.2,
     max_tokens=1024,
-    groq_api_key=os.environ.get("GROQ_API_KEgsk_0dt50z4In2DBL2yqZfH9WGdyb3FYMuQjTCfQCR9QZ4AhTO9eiCSB")
+    groq_api_key=os.environ.get("GROQ_API_KEY")
 )
 
 # ===============================
 # MANUAL RAG FUNCTION
 # ===============================
 def ask_question(query: str) -> str:
-    # 1️⃣ Retrieve top 3 relevant chunks
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
     
-    try:
-        relevant_docs = retriever.get_relevant_documents(query)
-    except AttributeError:
-        relevant_docs = retriever.invoke(query)
-    
-    if isinstance(relevant_docs, dict) and "docs" in relevant_docs:
-        relevant_docs = relevant_docs["docs"]
-    
-    # 2️⃣ Build prompt
+    relevant_docs = retriever.invoke(query)
+
     context_text = "\n\n".join([doc.page_content for doc in relevant_docs])
+
     prompt = f"""
 You are a helpful assistant. Use the following context to answer the question.
 
@@ -83,16 +77,19 @@ CONTEXT:
 QUESTION:
 {query}
 
-Answer in a clear and concise way.
+Answer only using the provided context.
+If the answer is not present, say "Information not found in documents".
 """
-    # 3️⃣ Generate answer using Groq LLaMA-3
-    response = llm.invoke(prompt)  # just pass string directly
-    return response
+
+    response = llm.invoke(prompt)
+
+    return response.content
 
 # ===============================
 # TEST QUERY
 # ===============================
 print(ask_question("How much attendance should we have?"))
+
 
 
 
